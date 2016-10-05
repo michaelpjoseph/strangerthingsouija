@@ -1,7 +1,7 @@
   // Mike Joseph - michaelpjoseph@gmail.com
 
-// 'Stranger Things' inspired LED quiji board with sound\
-//    utilizing:  Adafruit neopixel library for control of 100 chinese generic 2811 RGB LEDs
+// 'Stranger Things' inspired LED quiji board with sound
+//    utilizing:  Adafruit neopixel library for control of 100 (2 50x strands) generic 2811 RGB LEDs
 //                Adafruit soundboard library for control of Adafruit Sound FX 16 MB OGG / WAV decoder
 
 
@@ -62,8 +62,7 @@ String PHRASES[] = {
   "nightmare on kimberly"
 };
 
-// --- define sound arrays and serial control
-
+// --- define sound arrays and serial audio control
 #define SFX_TX 5
 #define SFX_RX 6
 #define SFX_RST 4
@@ -71,24 +70,26 @@ String PHRASES[] = {
 SoftwareSerial ss = SoftwareSerial(SFX_TX, SFX_RX);
 Adafruit_Soundboard sfx = Adafruit_Soundboard(&ss, NULL, SFX_RST);
 
-#define total_intermission_sounds 5;
-#define total_letter_sounds 5;
+// --- define sound parameters
+#define total_intermission_sounds 5;   // total # of intermission sounds for between phrases
+#define total_letter_sounds 5;   // total # of letter sounds for playing during letter cycle
 
-uint8_t current_letter_sound = 0;
+uint8_t current_letter_sound = 0;  // currently selected sounds for uniformity across functions
 uint8_t current_intermission_sound = 0;
 
-uint8_t LETTERSOUNDS[] = { 6, 5, 4, 3, 2 };
-
+uint8_t LETTERSOUNDS[] = { 6, 5, 4, 3, 2 };   // indexes of sounds as they exist on 16MB Adafruit FX board as found with the listfiles() funct
 uint8_t INTERMISSIONSOUNDS[] = { 1, 10, 9, 8, 7 };
 
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMBER_PIEXEL, LEDPIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMBER_PIEXEL, LEDPIN, NEO_GRB + NEO_KHZ800);   // define LED strip object
+
+
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200);  // Console serial and Soundboard sfx serial need to be at different rates or lights wont work.  I don't know why.
   ss.begin(9600);
 
-/* 
+/*  DEBUB  -- test to see if SFX board present
  *  
  if (!sfx.reset()) {
     Serial.println("SFX board NOT found");
@@ -98,7 +99,7 @@ void setup() {
   listfiles();
 */
 
-  listfiles();
+  listfiles();   // list files and phrase arrays on startup to console
   listphrases();
   
   strip.begin();
@@ -107,23 +108,30 @@ void setup() {
 
 
 void loop() {
-  //testletters();
+  //testletters();  // DEBUG - lights letters from A-Z sequentially for mapping purposes
   Serial.println(" - - - - - - - LOOOOOOOP - - - - - - - - ");
-  current_letter_sound = rand() % 5;
-  current_intermission_sound = rand() % 5;
+  
+  //randomize letter sounds, intermission sounds and current phrase
+  current_letter_sound = rand() % total_letter_sounds;  
+  current_intermission_sound = rand() % total_intermission_sounds;
   uint8_t current_phrase = rand() % totalphrases;
-  Serial.println(PHRASES[current_phrase]);
+  Serial.println(PHRASES[current_phrase]);  // DEBUG - send current phrase to console
+
+  //send current phrase to the LED board
   printphrase(current_phrase);
+ 
+  //play intermission track and flash the board / decay random LEDs out
   sfx.playTrack(INTERMISSIONSOUNDS[current_intermission_sound]);
   lightningcrash();
+
+  //hard delay between letter sequences
   delay(13000);
 }
 
 
 
-// --- DEBUG lists all phrases
 
-// --- DEBUG lists all phrases
+// --- DEBUG lists all phrases to console
 void listphrases() {
   uint8_t tp = totalphrases;
   for (uint8_t i = 0; i < tp; i++) {
@@ -132,7 +140,7 @@ void listphrases() {
 }
 
 
-// --- DEBUG lists availabe audio files
+// --- DEBUG lists availabe audio files to console
 void listfiles() {
   uint8_t files = sfx.listFiles();
     
@@ -147,6 +155,19 @@ void listfiles() {
   }
 }
 
+
+
+// DEBUG test letter mapping
+void testletters() {
+  for (char c='a'; c <= 'z'; c++) {
+    uint8_t curr_light = find_light_letter(c);
+    strip.setPixelColor(curr_light , 255, 255, 255);
+    strip.show();
+    delay(1500);
+    strip.setPixelColor(curr_light , 0, 0, 0);
+    strip.show();
+  }
+}
 
 
 // --- returns the light # as defined by the constants at the head of this sketch
@@ -182,34 +203,23 @@ uint8_t find_light_letter(char letter) {
   }
 }
 
-// DEBUG test letter mapping
-void testletters() {
-  for (char c='r'; c <= 'z'; c++) {
-    uint8_t curr_light = find_light_letter(c);
-    strip.setPixelColor(curr_light , 255, 255, 255);
-    strip.show();
-    delay(1500);
-    strip.setPixelColor(curr_light , 0, 0, 0);
-    strip.show();
-  }
-}
 
-
-// self explanitory
+// sequentially iterate through all letters in the current phrase and light up the corrosponding light on the board
 void printphrase(uint8_t phrasenum) {
   for (uint8_t b = 0; b < PHRASES[phrasenum].length(); b++) {
     char curr_letter = PHRASES[phrasenum].charAt(b);
     uint8_t curr_light = find_light_letter(curr_letter);
-    Serial.print("let: "); Serial.print(curr_letter); Serial.print("\tled: "); Serial.print(curr_light); Serial.print("\tsnd:"); Serial.println(current_letter_sound);
+    Serial.print("let: "); Serial.print(curr_letter); Serial.print("\tled: "); Serial.print(curr_light); Serial.print("\tsnd:"); Serial.println(current_letter_sound);  // DEBUG - dump lots of info to console while running
     sfx.playTrack(LETTERSOUNDS[current_letter_sound]);
     if (curr_light == 0) {
-      lightspace();
+      lightspace();  // flash all letters dim red and fade out on 'space' char
     } else {
-      lightletter(curr_light);
+      lightletter(curr_light);  // light correct light
     }
   }
 }
 
+// flash all letters dim red and fade out on 'space' char
 void lightspace() {
   for (uint8_t i = 0; i <= strip.numPixels(); i++) {
     strip.setPixelColor(i    , 0, 66, 0);
@@ -218,11 +228,13 @@ void lightspace() {
   for (int i = 70; i >= 0; i-- ) {
     strip.setBrightness(i);
     strip.show();
-    delay(36);
+    delay(36);  
   }
   strip.setBrightness(255);
 }
 
+
+// light up LED define by letter_num with a random RGB color
 void lightletter(int letter_num) {
   uint8_t red = rand() % 255;
   uint8_t blu = rand() % 255;
@@ -230,31 +242,19 @@ void lightletter(int letter_num) {
   strip.setPixelColor(letter_num, red, gre, blu);
   strip.setBrightness(255);
   strip.show();
-  for (int i = 255; i >= 0; i-- ) {
+  for (int i = 255; i >= 0; i-- ) {  // fade / dim current LED out slowly
     strip.setBrightness(i);
     strip.show();
     delay(2);
   }
-  strip.setBrightness(255);
-  delay(2000);
+  strip.setBrightness(255);  // reset strip brightness for next letter
+  delay(2000);  // delay between letters - should probably be in printphrase()
 }
 
-void flash(uint8_t pos) {
-  for (int i = 0; i <= 4; i++) {
-    strip.setPixelColor(pos - 2, 255, 255, 255); // Dark red
-    strip.setPixelColor(pos - 1, 255, 255, 255); // Medium red
-    strip.setPixelColor(pos    , 255, 255, 255); // Center pixel is brightest
-    strip.setPixelColor(pos + 1, 255, 255, 255); // Medium red
-    strip.setPixelColor(pos + 2, 255, 255, 255); // Dark red
-    strip.show();
-    delay(75);
-    for(uint8_t j=-2; j<= 2; j++) strip.setPixelColor(pos+j, 0);
-    strip.show();
-    delay(75);
-  }
-}
 
+//flash all lights several times then light them all up with random colors and decay out 
 void lightningcrash() {
+  // -- first - single flash - blue
   for (uint8_t i = 0; i <= strip.numPixels(); i++) {
     strip.setPixelColor(i    , 0, 0, 175);
   }
@@ -264,6 +264,7 @@ void lightningcrash() {
   strip.show();
   strip.setBrightness(255);
   delay(250);
+  // -- second - set of rapid flashes - white (currently at 50 RGB,   255 RGB is REALLY bright)
   for (int times = 0; times < 4; times++) {
     for (int i = 0; i <= strip.numPixels(); i++) {
       strip.setPixelColor(i    , 50, 50, 50);
@@ -275,11 +276,13 @@ void lightningcrash() {
     strip.setBrightness(255);
     delay(50);
   }
+  // -- third - single flash - bright white
   for (int i = 0; i <= strip.numPixels(); i++) {
     strip.setPixelColor(i    , 255, 255, 255);
   }
   strip.show();
   delay(200);
+  // -- random light and decay sequence
   for (int i = 0; i <= strip.numPixels(); i++) {
     int red=rand() % 255;
     int gre=rand() % 255;
@@ -290,8 +293,8 @@ void lightningcrash() {
   for (int i = 255; i >= 0; i-- ) {
     strip.setBrightness(i);
     strip.show();
-    delay(25----);
+    delay(25);  // decay speed
   }
-  strip.setBrightness(255);
+  strip.setBrightness(255); // reset brightness
 }
 
